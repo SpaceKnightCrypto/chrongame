@@ -3230,6 +3230,19 @@ e=>this._OnJobWorkerMessage(e)}catch(err){this._hadErrorCreatingWorker=true;this
 
 {
 self["C3_Shaders"] = {};
+self["C3_Shaders"]["water"] = {
+	glsl: "#ifdef GL_FRAGMENT_PRECISION_HIGH\n#define highmedp highp\n#else\n#define highmedp mediump\n#endif\nvarying mediump vec2 vTex;\nuniform lowp sampler2D samplerFront;\nuniform mediump vec2 srcStart;\nuniform mediump vec2 srcEnd;\nprecision mediump float;\nuniform highmedp float seconds;\nuniform mediump vec2 pixelSize;\nconst float PI = 3.1415926535897932;\nuniform float speed;\nuniform float speed_x;\nuniform float speed_y;\nuniform float intensity;\nconst float steps = 8.0;\nuniform float frequency;\nuniform float angle; // better when a prime\nuniform float delta;\nuniform float intence;\nuniform float emboss;\nfloat col(vec2 coord)\n{\nfloat delta_theta = 2.0 * PI / angle;\nfloat col = 0.0;\nfloat theta = 0.0;\nfor (float i = 0.0; i < steps; i++)\n{\nvec2 adjc = coord;\ntheta = delta_theta*i;\nadjc.x += cos(theta)*seconds*speed + seconds * speed_x;\nadjc.y -= sin(theta)*seconds*speed - seconds * speed_y;\ncol = col + cos( (adjc.x*cos(theta) - adjc.y*sin(theta))*frequency)*intensity;\n}\nreturn cos(col);\n}\nvoid main(void)\n{\nmediump vec2 tex = (vTex - srcStart) / (srcEnd - srcStart);\nvec2 p = tex, c1 = p, c2 = p;\nfloat cc1 = col(c1);\nc2.x += (1.0 / pixelSize.x) / delta;\nfloat dx = emboss*(cc1-col(c2))/delta;\nc2.x = p.x;\nc2.y += (1.0 / pixelSize.y) / delta;\nfloat dy = emboss*(cc1-col(c2))/delta;\nc1.x += dx;\nc1.y = -(c1.y+dy);\nfloat alpha = 1.+dot(dx,dy)*intence;\nc1.y = -c1.y;\nc1 = clamp(c1, 0.0, 1.0);\ngl_FragColor = texture2D(samplerFront, mix(srcStart, srcEnd, c1)) * alpha;\n}",
+	wgsl: "%%SAMPLERFRONT_BINDING%% var samplerFront : sampler;\n%%TEXTUREFRONT_BINDING%% var textureFront : texture_2d<f32>;\nstruct ShaderParams {\nspeed : f32;\nspeed_x : f32;\nspeed_y : f32;\nintensity : f32;\nfrequency : f32;\nangle : f32;\ndelta : f32;\nintence : f32;\nemboss : f32;\n};\n%%SHADERPARAMS_BINDING%% var<uniform> shaderParams : ShaderParams;\n%%C3PARAMS_STRUCT%%\n%%C3_UTILITY_FUNCTIONS%%\n%%FRAGMENTINPUT_STRUCT%%\n%%FRAGMENTOUTPUT_STRUCT%%\nlet pi : f32 = 3.1415926535897932;\nlet steps = 8.0;\nfn col(coord : vec2<f32>) -> f32\n{\nvar delta_theta : f32 = 2.0 * pi / shaderParams.angle;\nvar col : f32 = 0.0;\nvar theta : f32 = 0.0;\nfor (var i : f32 = 0.0; i < steps; i = i + 1.0)\n{\nvar adjc : vec2<f32> = coord;\ntheta = delta_theta * i;\nadjc.x = adjc.x + cos(theta) * c3Params.seconds * shaderParams.speed + c3Params.seconds * shaderParams.speed_x;\nadjc.y = adjc.y - (sin(theta) * c3Params.seconds * shaderParams.speed - c3Params.seconds * shaderParams.speed_y);\ncol = col + cos((adjc.x * cos(theta) - adjc.y * sin(theta)) * shaderParams.frequency) * shaderParams.intensity;\n}\nreturn cos(col);\n}\n@stage(fragment)\nfn main(input : FragmentInput) -> FragmentOutput\n{\nvar texSize : vec2<f32> = vec2<f32>(textureDimensions(textureFront));\nvar tex : vec2<f32> = c3_srcToNorm(input.fragUV);\nvar p : vec2<f32> = tex;\nvar c1 : vec2<f32> = tex;\nvar c2 : vec2<f32> = tex;\nvar cc1 : f32 = col(c1);\nc2.x = c2.x + texSize.x / shaderParams.delta;\nvar dx : f32 = shaderParams.emboss * (cc1 - col(c2)) / shaderParams.delta;\nc2.x = p.x;\nc2.y = c2.y + texSize.y / shaderParams.delta;\nvar dy : f32 = shaderParams.emboss * (cc1 - col(c2)) / shaderParams.delta;\nc1.x = c1.x + dx;\nc1.y = -(c1.y + dy);\nvar alpha : f32 = 1.0 + dx * dy * shaderParams.intence;\nc1.y = -c1.y;\nc1 = c3_clamp2(c1, 0.0, 1.0);\nvar output : FragmentOutput;\noutput.color = textureSample(textureFront, samplerFront, mix(c3Params.srcStart, c3Params.srcEnd, c1)) * alpha;\nreturn output;\n}",
+	blendsBackground: false,
+	usesDepth: false,
+	extendBoxHorizontal: 40,
+	extendBoxVertical: 40,
+	crossSampling: false,
+	mustPreDraw: false,
+	preservesOpaqueness: false,
+	animated: true,
+	parameters: [["speed",0,"percent"],["speed_x",0,"percent"],["speed_y",0,"percent"],["intensity",0,"float"],["frequency",0,"float"],["angle",0,"float"],["delta",0,"float"],["intence",0,"float"],["emboss",0,"percent"]]
+};
 self["C3_Shaders"]["fogexponential"] = {
 	glsl: "varying mediump vec2 vTex;\nuniform lowp sampler2D samplerFront;\nuniform mediump vec2 srcStart;\nuniform mediump vec2 srcEnd;\nuniform lowp sampler2D samplerDepth;\nuniform mediump vec2 destStart;\nuniform mediump vec2 destEnd;\nuniform lowp vec3 fogColor;\nuniform mediump float fogDensity;\nuniform mediump float nearDist;\nvoid main(void)\n{\nmediump float zFar = 10000.0;\nmediump float zNear = 1.0;\nmediump float log2 = 1.442695;\nlowp vec4 front = texture2D(samplerFront, vTex);\nmediump vec2 tex = (vTex - srcStart) / (srcEnd - srcStart);\nmediump float depthSample = texture2D(samplerDepth, mix(destStart, destEnd, tex)).r;\nmediump float zLinear = zNear * zFar / (zFar + depthSample * (zNear - zFar));\nmediump float fogDist = max(zLinear - nearDist, 0.0);\nmediump float fogAmount = clamp(1.0 - exp2(-fogDensity * fogDensity * fogDist * fogDist * log2), 0.0, 1.0);\ngl_FragColor = mix(front, vec4(fogColor * front.a, front.a), fogAmount);\n}",
 	wgsl: "%%SAMPLERFRONT_BINDING%% var samplerFront : sampler;\n%%TEXTUREFRONT_BINDING%% var textureFront : texture_2d<f32>;\n%%SAMPLERDEPTH_BINDING%% var samplerDepth : sampler;\n%%TEXTUREDEPTH_BINDING%% var textureDepth : texture_depth_2d;\nstruct ShaderParams {\nfogColor : vec3<f32>;\nfogDensity : f32;\nnearDist : f32;\n};\n%%SHADERPARAMS_BINDING%% var<uniform> shaderParams : ShaderParams;\n%%C3PARAMS_STRUCT%%\n%%FRAGMENTINPUT_STRUCT%%\n%%FRAGMENTOUTPUT_STRUCT%%\nlet zFar : f32 = 10000.0;\nlet zNear : f32 = 1.0;\nlet log_2 = 1.442695;\n@stage(fragment)\nfn main(input : FragmentInput) -> FragmentOutput\n{\nvar front : vec4<f32> = textureSample(textureFront, samplerFront, input.fragUV);\nvar depthSample : f32 = textureSample(textureDepth, samplerDepth, c3_getBackUV(input.fragUV));\ndepthSample = (depthSample + 1.0) / 2.0;\t\t// map [-1, 1] to [0, 1] - not sure why needed\nvar zLinear : f32 = zNear * zFar / (zFar + depthSample * (zNear - zFar));\nvar fogDist = max(zLinear - shaderParams.nearDist, 0.0);\nvar fogAmount : f32 = clamp(1.0 - exp2(-shaderParams.fogDensity * shaderParams.fogDensity * fogDist * fogDist * log_2), 0.0, 1.0);\nvar output : FragmentOutput;\noutput.color = mix(front, vec4<f32>(shaderParams.fogColor * front.a, front.a), fogAmount);\nreturn output;\n}",
@@ -3619,20 +3632,73 @@ this.GetBehaviorType().GetName(),properties:[{name:"behaviors.solid.properties.e
 }
 
 {
+'use strict';const C3=self.C3;C3.Behaviors.Turret=class TurretBehavior extends C3.SDKBehaviorBase{constructor(opts){super(opts)}Release(){super.Release()}};
+
+}
+
+{
+'use strict';const C3=self.C3;C3.Behaviors.Turret.Type=class TurretType extends C3.SDKBehaviorTypeBase{constructor(behaviorType){super(behaviorType);this._targetTypes=[]}Release(){C3.clearArray(this._targetTypes);super.Release()}OnCreate(){}GetTargetTypes(){return this._targetTypes}};
+
+}
+
+{
+'use strict';const C3=self.C3;const RANGE=0;const RATE_OF_FIRE=1;const ROTATE=2;const ROTATE_SPEED=3;const TARGET_MODE=4;const PREDICTIVE_AIM=5;const PROJECTILE_SPEED=6;const USE_COLLISION_CELLS=7;const ENABLED=8;const tmpRect=C3.New(C3.Rect);const candidates=[];
+C3.Behaviors.Turret.Instance=class TurretInstance extends C3.SDKBehaviorInstanceBase{constructor(behInst,properties){super(behInst);this._range=300;this._rateOfFire=1;this._isRotateEnabled=true;this._rotateSpeed=C3.toRadians(180);this._targetMode=0;this._predictiveAim=false;this._projectileSpeed=500;this._useCollisionCells=true;this._isEnabled=true;this._lastCheckTime=0;this._fireTimeCount=0;this._currentTarget=null;this._loadTargetUid=-1;this._oldTargetX=0;this._oldTargetY=0;this._lastSpeeds=[0,
+0,0,0];this._speedsCount=0;this._firstTickWithTarget=true;if(properties){this._range=properties[RANGE];this._rateOfFire=properties[RATE_OF_FIRE];this._isRotateEnabled=!!properties[ROTATE];this._rotateSpeed=C3.toRadians(properties[ROTATE_SPEED]);this._targetMode=properties[TARGET_MODE];this._predictiveAim=!!properties[PREDICTIVE_AIM];this._projectileSpeed=properties[PROJECTILE_SPEED];this._useCollisionCells=!!properties[USE_COLLISION_CELLS];this._isEnabled=!!properties[ENABLED]}this._fireTimeCount=
+this._rateOfFire;const rt=this._runtime.Dispatcher();this._disposables=new C3.CompositeDisposable(C3.Disposable.From(rt,"instancedestroy",e=>this._OnInstanceDestroyed(e.instance)),C3.Disposable.From(rt,"afterload",e=>this._OnAfterLoad()));if(this._isEnabled)this._StartTicking()}Release(){this._currentTarget=null;super.Release()}_OnAfterLoad(){if(this._loadTargetUid===-1)this._currentTarget=null;else this._currentTarget=this._runtime.GetInstanceByUID(this._loadTargetUid)}_OnInstanceDestroyed(inst){if(this._currentTarget===
+inst)this._currentTarget=null}SaveToJson(){return{"r":this._range,"rof":this._rateOfFire,"re":this._isRotateEnabled,"rs":this._rotateSpeed,"tm":this._targetMode,"pa":this._predictiveAim,"ps":this._projectileSpeed,"ucc":this._useCollisionCells,"e":this._isEnabled,"lct":this._lastCheckTime,"ftc":this._fireTimeCount,"t":this._currentTarget?this._currentTarget.GetUID():-1,"ox":this._oldTargetX,"oy":this._oldTargetY,"ls":this._lastSpeeds,"sc":this._speedsCount,"targs":this.GetSdkType().GetTargetTypes().map(t=>
+t.GetSID())}}LoadFromJson(o){this._range=o["r"];this._rateOfFire=o["rof"];this._isRotateEnabled=o["re"];this._rotateSpeed=o["rs"];this._targetMode=o["tm"];this._predictiveAim=o["pa"];this._projectileSpeed=o["ps"];this._useCollisionCells=o["ucc"];this._SetEnabled(o["e"]);this._lastCheckTime=o["lct"];this._fireTimeCount=o["ftc"];this._loadTargetUid=o["t"];this._oldTargetX=o["ox"];this._oldTargetY=o["oy"];this._lastSpeeds=o["ls"];this._speedsCount=o["sc"];const targetTypes=this.GetSdkType().GetTargetTypes();
+C3.clearArray(targetTypes);for(const sid of o["targs"]){const objectClass=this._runtime.GetObjectClassBySID(sid);if(objectClass)targetTypes.push(objectClass)}}AddSpeed(s){if(this._speedsCount<4){this._lastSpeeds[this._speedsCount]=s;this._speedsCount++}else{this._lastSpeeds.shift();this._lastSpeeds.push(s)}}GetSpeed(){let ret=0;for(let i=0;i<this._speedsCount;++i)ret+=this._lastSpeeds[i];return ret/this._speedsCount}IsInRange(inst){const myWi=this.GetWorldInfo();const otherWi=inst.GetWorldInfo();
+const dx=otherWi.GetX()-myWi.GetX();const dy=otherWi.GetY()-myWi.GetY();return dx*dx+dy*dy<=this._range*this._range}LookForFirstTarget(){const wi=this.GetWorldInfo();const targetTypes=this.GetSdkType().GetTargetTypes();const collisionEngine=this._runtime.GetCollisionEngine();if(this._useCollisionCells){tmpRect.set(wi.GetX()-this._range,wi.GetY()-this._range,wi.GetX()+this._range,wi.GetY()+this._range);collisionEngine.GetObjectClassesCollisionCandidates(null,targetTypes,tmpRect,candidates)}else for(const objectClass of targetTypes)C3.appendArray(candidates,
+objectClass.GetInstances());for(const rinst of candidates)if(rinst!==this._inst&&this.IsInRange(rinst)){this._currentTarget=rinst;C3.clearArray(candidates);return}C3.clearArray(candidates)}LookForNearestTarget(){const wi=this.GetWorldInfo();const targetTypes=this.GetSdkType().GetTargetTypes();const collisionEngine=this._runtime.GetCollisionEngine();const myX=wi.GetX();const myY=wi.GetY();let closest=this._range*this._range;this._currentTarget=null;if(this._useCollisionCells){tmpRect.set(myX-this._range,
+myY-this._range,myX+this._range,myY+this._range);collisionEngine.GetObjectClassesCollisionCandidates(null,targetTypes,tmpRect,candidates)}else for(const objectClass of targetTypes)C3.appendArray(candidates,objectClass.GetInstances());for(const rinst of candidates){if(rinst===this._inst)continue;const otherWi=rinst.GetWorldInfo();const dx=myX-otherWi.GetX();const dy=myY-otherWi.GetY();const dist=dx*dx+dy*dy;if(dist<closest){this._currentTarget=rinst;closest=dist}}C3.clearArray(candidates)}_OnTargetAcquired(){this._speedsCount=
+0;this._firstTickWithTarget=true;const targetWi=this._currentTarget.GetWorldInfo();this._oldTargetX=targetWi.GetX();this._oldTargetY=targetWi.GetY();this.Trigger(C3.Behaviors.Turret.Cnds.OnTargetAcquired)}Tick(){if(!this._isEnabled)return;const dt=this._runtime.GetDt(this._inst);const nowTime=this._runtime.GetGameTime();const wi=this.GetWorldInfo();if(this._currentTarget&&!this.IsInRange(this._currentTarget)){this._currentTarget=null;this._speedsCount=0;this._firstTickWithTarget=true}if(nowTime>=
+this._lastCheckTime+.1){this._lastCheckTime=nowTime;if(this._targetMode===0&&!this._currentTarget){this.LookForFirstTarget();if(this._currentTarget)this._OnTargetAcquired()}else if(this._targetMode===1){const oldTarget=this._currentTarget;this.LookForNearestTarget();if(this._currentTarget&&this._currentTarget!==oldTarget)this._OnTargetAcquired()}}this._fireTimeCount+=dt;if(this._currentTarget){let targetWi=this._currentTarget.GetWorldInfo();let targetAngle=C3.angleTo(wi.GetX(),wi.GetY(),targetWi.GetX(),
+targetWi.GetY());if(this._predictiveAim){const Gx=wi.GetX();const Gy=wi.GetY();const Px=targetWi.GetX();const Py=targetWi.GetY();const h=C3.angleTo(Px,Py,this._oldTargetX,this._oldTargetY);if(!this._firstTickWithTarget)this.AddSpeed(C3.distanceTo(Px,Py,this._oldTargetX,this._oldTargetY)/dt);const s=this.GetSpeed();const q=Py-Gy;const r=Px-Gx;const w=(s*Math.sin(h)*(Gx-Px)-s*Math.cos(h)*(Gy-Py))/this._projectileSpeed;const a=Math.asin(w/Math.sqrt(q*q+r*r))-Math.atan2(q,-r)+Math.PI;if(!isNaN(a))targetAngle=
+a}if(this._isRotateEnabled){wi.SetAngle(C3.angleRotate(wi.GetAngle(),targetAngle,this._rotateSpeed*dt));wi.SetBboxChanged()}if(this._fireTimeCount>=this._rateOfFire&&(!this._isRotateEnabled||C3.toDegrees(C3.angleDiff(wi.GetAngle(),targetAngle))<=.1)&&(!this._predictiveAim||this._speedsCount>=4)){this._fireTimeCount-=this._rateOfFire;if(this._fireTimeCount>=this._rateOfFire)this._fireTimeCount=0;this.Trigger(C3.Behaviors.Turret.Cnds.OnShoot)}if(this._currentTarget){targetWi=this._currentTarget.GetWorldInfo();
+this._oldTargetX=targetWi.GetX();this._oldTargetY=targetWi.GetY()}this._firstTickWithTarget=false}if(this._fireTimeCount>this._rateOfFire)this._fireTimeCount=this._rateOfFire}GetPropertyValueByIndex(index){switch(index){case RANGE:return this._range;case RATE_OF_FIRE:return this._rateOfFire;case ROTATE:return this._isRotateEnabled;case ROTATE_SPEED:return C3.toDegrees(this._rotateSpeed);case TARGET_MODE:return this._targetMode;case PREDICTIVE_AIM:return this._predictiveAim;case PROJECTILE_SPEED:return this._projectileSpeed;
+case USE_COLLISION_CELLS:return this._useCollisionCells;case ENABLED:return this._isEnabled}}SetPropertyValueByIndex(index,value){switch(index){case RANGE:this._range=value;break;case RATE_OF_FIRE:this._rateOfFire=value;break;case ROTATE:this._isRotateEnabled=!!value;break;case ROTATE_SPEED:if(!this._isRotateEnabled)return;this._rotateSpeed=C3.toRadians(value);break;case TARGET_MODE:this._targetMode=value;break;case PREDICTIVE_AIM:this._predictiveAim=!!value;break;case PROJECTILE_SPEED:if(!this._predictiveAim)return;
+this._projectileSpeed=value;break;case USE_COLLISION_CELLS:this._useCollisionCells=!!value;break;case ENABLED:this._SetEnabled(value);break}}_SetEnabled(e){this._isEnabled=!!e;if(this._isEnabled)this._StartTicking();else this._StopTicking()}GetDebuggerProperties(){const prefix="behaviors.turret";return[{title:"$"+this.GetBehaviorType().GetName(),properties:[{name:prefix+".properties.range.name",value:this._range,onedit:v=>this._range=v},{name:prefix+".properties.rate-of-fire.name",value:this._rateOfFire,
+onedit:v=>this._rateOfFire=v},{name:prefix+".properties.rotate-speed.name",value:C3.toDegrees(this._rotateSpeed),onedit:v=>this._rotateSpeed=C3.toRadians(v)},{name:prefix+".properties.predictive-aim.name",value:this._predictiveAim,onedit:v=>this._predictiveAim=v},{name:prefix+".properties.projectile-speed.name",value:this._projectileSpeed,onedit:v=>this._projectileSpeed=v},{name:prefix+".debugger.has-target",value:!!this._currentTarget},{name:prefix+".debugger.target-uid",value:this._currentTarget?
+this._currentTarget.GetUID():0},{name:prefix+".properties.enabled.name",value:this._isEnabled,onedit:v=>this._SetEnabled(v)}]}]}};
+
+}
+
+{
+'use strict';const C3=self.C3;C3.Behaviors.Turret.Cnds={HasTarget(){return!!this._currentTarget},OnShoot(){return true},OnTargetAcquired(){return true},IsEnabled(){return this._isEnabled}};
+
+}
+
+{
+'use strict';const C3=self.C3;
+C3.Behaviors.Turret.Acts={AcquireTarget(objectClass){if(!objectClass)return;const instances=objectClass.GetCurrentSol().GetInstances();for(const inst of instances)if(this._currentTarget!==inst&&this._inst!==inst&&this.IsInRange(inst)){this._currentTarget=inst;this._OnTargetAcquired();break}},AddTarget(objectClass){const targetTypes=this.GetSdkType().GetTargetTypes();if(targetTypes.includes(objectClass))return;for(const t of targetTypes)if(t.IsFamily()&&t.FamilyHasMember(objectClass))return;targetTypes.push(objectClass)},
+ClearTargets(){C3.clearArray(this.GetSdkType().GetTargetTypes())},UnacquireTarget(){this._currentTarget=null;this._speedsCount=0;this._firstTickWithTarget=true},SetEnabled(e){this._SetEnabled(e!==0)},SetRange(r){this._range=r},SetRateOfFire(r){this._rateOfFire=r},SetRotate(r){this._isRotateEnabled=r!==0},SetRotateSpeed(r){this._rotateSpeed=C3.toRadians(r)},SetTargetMode(m){this._targetMode=m},SetPredictiveAim(p){this._predictiveAim=p!==0},SetProjectileSpeed(s){this._projectileSpeed=s}};
+
+}
+
+{
+'use strict';const C3=self.C3;C3.Behaviors.Turret.Exps={TargetUID(){return this._currentTarget?this._currentTarget.GetUID():0},Range(){return this._range},RateOfFire(){return this._rateOfFire},RotateSpeed(){return C3.toDegrees(this._rotateSpeed)}};
+
+}
+
+{
 const C3 = self.C3;
 self.C3_GetObjectRefTable = function () {
 	return [
 		C3.Plugins.Sprite,
 		C3.Behaviors.Platform,
 		C3.Plugins.TiledBg,
-		C3.Behaviors.solid
+		C3.Behaviors.solid,
+		C3.Behaviors.Turret
 	];
 };
 self.C3_JsPropNameTable = [
 	{Platform: 0},
 	{Sprite: 0},
 	{Solid: 0},
-	{TiledBackground: 0}
+	{TiledBackground: 0},
+	{Turret: 0},
+	{Sprite2: 0}
 ];
 }
 
