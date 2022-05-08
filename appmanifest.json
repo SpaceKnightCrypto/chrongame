@@ -1,10 +1,10 @@
 {
-	"name": "Trial",
-	"short_name": "Trial",
+	"name": "New project",
+	"short_name": "New project",
 	"description": "",
 	"start_url": "index.html",
 	"display": "fullscreen",
-	"orientation": "portrait",
+	"orientation": "landscape",
 	"background_color": "#ffffff",
 	"icons": [
 		{
